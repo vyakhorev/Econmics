@@ -10,8 +10,7 @@
 
 
 UCLASS()
-class ECONMICS_API UEconGameInstance : public UGameInstance
-{
+class ECONMICS_API UEconGameInstance : public UGameInstance {
 	GENERATED_BODY()
 
 public:
@@ -57,6 +56,26 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Simulation glue")
 	bool StartTestThread();
 
+	/* Multithread testing... */
+	UFUNCTION(BlueprintCallable, Category = "Simulation glue")
+	bool DispatchTestSimulationEvents();
+
+	/* Multithread testing... */
+	UFUNCTION(BlueprintCallable, Category = "Simulation glue")
+	bool StopTestThread();
+
+	/* Multithread testing... */
+	UFUNCTION(BlueprintCallable, Category = "Simulation glue")
+	bool SetupRegularPullSimEventTimer();
+
+	FTimerHandle simulation_checkup_timer_handle;
+
+	void TestTimerCall();
+
+
+	bool is_simulation_thread_running;
+	FRunnableThread *simulation_thread;
+	FPyThreadWorker *simulation_runnable;
 
 };
 

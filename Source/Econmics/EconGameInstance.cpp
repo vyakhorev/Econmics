@@ -9,8 +9,7 @@ UEconGameInstance::UEconGameInstance(const FObjectInitializer& ObjectInitializer
 	We can't move this into Init() call since FObjectFinder is available only in constructor */
 	static ConstructorHelpers::FObjectFinder<UBlueprint> BlockBaseBlueprint(TEXT("Blueprint'/Game/Economic/block_base_BP.block_base_BP'"));
 
-	if (BlockBaseBlueprint.Object != NULL)
-	{
+	if (BlockBaseBlueprint.Object != NULL) {
 		this->BlockBaseBlueprintClass = (UClass*)BlockBaseBlueprint.Object->GeneratedClass;
 	}
 	else {
@@ -124,31 +123,111 @@ bool UEconGameInstance::RunTestSimulationOnce(int32 time_units) {
 
 	return true;
 
-	// This makes UE4 crash in 10 seconds. At least something.
-	//TArray<uint32> PrimeNumbers;
-	//FPrimeNumberWorker *NewWorker = FPrimeNumberWorker::JoyInit(PrimeNumbers, 5000);	
+}
+
+
+
+/* Simulation thread logic */
+
+bool UEconGameInstance::StartTestThread() {
+
+	if (this->is_simulation_thread_running) {
+		UE_LOG(LogTemp, Warning, TEXT("Attempt to start already running thread"));
+		return false;
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("Starting simulation thread"));
+
+	/* This thing shall be managed by UE as a separate thread */
+	FPyThreadWorker *MyRunnable = NULL;
+	MyRunnable = new FPyThreadWorker();
+	this->simulation_runnable = MyRunnable;  // hold the reference to collect it later
+
+	// windows default = 8mb for thread, could specify more
+	FString ThreadName = TEXT("MyThreadWithSimulation");
+	this->simulation_thread = FRunnableThread::Create(MyRunnable, *ThreadName, 0, TPri_BelowNormal);
+
+	this->is_simulation_thread_running = true;
+	return true;
 
 }
 
-bool UEconGameInstance::StartTestThread() {
-	UE_LOG(LogTemp, Warning, TEXT("Starting new thread"));
+bool UEconGameInstance::DispatchTestSimulationEvents() {
+	if (!this->is_simulation_thread_running) {
+		UE_LOG(LogTemp, Warning, TEXT("Attempt to read events when no simulation active"));
+		return false;
+	}
 
-	/* This thing shall be managed by UE as a separate thread */
-	FPyThreadWorker *myRunnable = NULL;
-	myRunnable = new FPyThreadWorker();
+	// This can lock game thread, so we need to be smart about it.
+	// May be reading a single event is not such a bad idea..
+	TArray<uint32> recent_events = this->simulation_runnable->GetRecentEvents();
 
-	/* This is how we launch this runnable */
-	FRunnableThread *the_thread;
+	UE_LOG(LogTemp, Warning, TEXT("DispatchTestSimulationEvents!!!"));
 
-	//windows default = 8mb for thread, could specify more
-	the_thread = FRunnableThread::Create(myRunnable, TEXT("FPyThreadWorker"), 0, TPri_BelowNormal);
+	for (auto ev_i : recent_events) {
+		// These are test numbers at the moment
+		UE_LOG(LogTemp, Warning, TEXT("Event: %d"), ev_i);
+	}
 
-	/* This is how we clean up */
+	return true;
 
-	//delete this->the_thread;
-	//this->the_thread = NULL;
+}
 
+void UEconGameInstance::TestTimerCall() {
+	UE_LOG(LogTemp, Warning, TEXT("Timer calls"));
+	this->DispatchTestSimulationEvents();
+}
 
+bool UEconGameInstance::SetupRegularPullSimEventTimer() {
+
+	//this->GetWorld()->GetTimerManager().SetTimer(this->simulation_checkup_timer, this, )
+	//FTimerDelegate MyDel;
+	//MyDel.BindUFunction(this, "DispatchTestSimulationEvents");
+	//FTimerDelegate RespawnDelegate = FTimerDelegate::CreateUObject(this, &UEconGameInstance::DispatchTestSimulationEvents);
+
+	this->GetWorld()->GetTimerManager().SetTimer(this->simulation_checkup_timer_handle,
+		this, &UEconGameInstance::TestTimerCall, 0.5f, true);
+
+	return true;
+
+}
+
+bool UEconGameInstance::StopTestThread() {
+	// Clean up the thread
+	if (!this->is_simulation_thread_running) {
+		UE_LOG(LogTemp, Warning, TEXT("[StopTestThread] Attempt to stop a non-running thread"));
+		return false;
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("[StopTestThread] Stopping simulation thread"));
+
+	// WaitForCompletion() would invoke Stop() in some manner as well, but only after
+	// Run() finishes execution. This way we ensure that the flag to stop Run() is
+	// set up.
+	this->simulation_runnable->AskToStop();
+	this->simulation_thread->WaitForCompletion();
+
+	if (this->simulation_thread) {
+		delete this->simulation_thread;
+		this->simulation_thread = nullptr;
+	}
+	else {
+		UE_LOG(LogTemp, Warning, TEXT("[StopTestThread] simulation thread already deleted"));
+	}
+
+	// Deleting runnable before deleting the thread invokes an excpetion. But we still have
+	// to do it to free the memory.
+	if (this->simulation_runnable) {
+		delete this->simulation_runnable;
+		this->simulation_runnable = nullptr;
+	}
+	else {
+		UE_LOG(LogTemp, Warning, TEXT("[StopTestThread] simulation runnable already deleted"));
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("[StopTestThread] Stopped simulation thread"));
+
+	this->is_simulation_thread_running = false;
 	return true;
 
 }
