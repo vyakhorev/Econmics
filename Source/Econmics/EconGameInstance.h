@@ -51,7 +51,6 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Simulation glue")
 	bool RunTestSimulationOnce(int32 time_units);
 
-
 	/* Multithread testing... */
 	UFUNCTION(BlueprintCallable, Category = "Simulation glue")
 	bool StartTestThread();

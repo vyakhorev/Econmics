@@ -47,14 +47,16 @@ public:
 	bool Shutdown();
 
 	/* Test spawn. Populates GameBlockMap and returns true in case of success. */
-	bool spawnTestWorld();
-	TArray<SimGameBlock> getActiveChunk();
+	bool SpawnTestWorld();
+
+	/* Returns the spawned world */
+	TArray<SimGameBlock> GetActiveChunk();
 
 	/* Test simulation. Constructs simulation environment */
-	bool constructSimulationEnvironment();
+	bool ConstructSimulationEnvironment();
 
 	/* Test simulation */
-	bool runSimulationInterval(long interval_tu);
+	bool RunSimulationInterval(long interval_tu);
 	TArray<FGameEvent> recent_events;
 
 	/* A way to pass and buffer the world in the C++ memory,
@@ -65,19 +67,19 @@ public:
 private:
 
 	/* Adds the block to the internal map. This arhitecture should be tuned somehow.. */
-	bool addNewBlock(long relX, long relY, long relZ, long cube_type, long gid);
+	bool AddNewBlock(long relX, long relY, long relZ, long cube_type, long gid);
 
 	/* Adds a simulation event into internal TArray */
-	bool registerRecentEvent(PyObject *sim_event);
+	bool RegisterRecentEvent(PyObject *sim_event);
 
 	/* Starts python only if not is_python_working */
-	bool safeStartPython();
+	bool SafeStartPython();
 	/* Stops python only if is_python_working */
-	bool safeStopPython();
+	bool SafeStopPython();
 	bool is_python_working;
 
 	/* imports and links ue4exec.py */
-	bool importPyInterfaceModule();
+	bool ImportPyInterfaceModule();
 	
 	/* A link to the cSimWorld instance */
 	PyObject *py_world_instance;

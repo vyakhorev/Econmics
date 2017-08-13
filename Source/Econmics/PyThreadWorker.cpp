@@ -1,37 +1,48 @@
 #include "Econmics.h"
 #include "PyThreadWorker.h"
 
-FPyThreadWorker::FPyThreadWorker() {
-	// Not sure I want this in constructor..
+/* ~~~~~~~~~~ Basic mechanics ~~~~~~~~~~ */
 
-	this->m_semaphore = FGenericPlatformProcess::GetSynchEventFromPool(false);
-	this->m_stop_simulation = false;
+FPyThreadWorker::FPyThreadWorker() {
+
+	this->sim_cycle_semaphore = FGenericPlatformProcess::GetSynchEventFromPool(false);
+
+	/* A flag to stop the Run() loop. */
+	this->flag_is_simulation_stopped = false;
 
 }
 
 FPyThreadWorker::~FPyThreadWorker() {
 
-	if (this->m_semaphore) {
-		//Cleanup the FEvent
-		FGenericPlatformProcess::ReturnSynchEventToPool(this->m_semaphore);
-		this->m_semaphore = nullptr;
+	//Cleanup the FEvent
+	if (this->sim_cycle_semaphore) {
+		FGenericPlatformProcess::ReturnSynchEventToPool(this->sim_cycle_semaphore);
+		this->sim_cycle_semaphore = nullptr;
 	}
 
 }
 
 bool FPyThreadWorker::Init() {
+
 	this->recent_events.Empty();
 	return true;
+
 }
 
 uint32 FPyThreadWorker::Run() {
 
-	while (!this->m_stop_simulation) {
-		// Straight forward implementation: do the tick and wait.
-		// A lot of optimisations available here. Semafore would
-		// be triggered when the game thread calls GetRecentEvents().
-		this->RunSimEventsTick(0.1f);
-		this->m_semaphore->Wait();
+	/* First simulation iteration */
+	if (!this->flag_is_simulation_stopped) {
+		this->DoPython();
+	}
+
+	while (!this->flag_is_simulation_stopped) {
+		/* Straight forward implementation: do the tick and wait.
+		A lot of optimisations available here. Semafore would
+		be triggered when the game thread calls GetRecentEvents().
+		We have to wait first so that AskToStop() would work. */
+		this->sim_cycle_semaphore->Wait();
+		this->DoPython();
 	}
 
 	return 0;
@@ -44,77 +55,93 @@ void FPyThreadWorker::Stop() {
 }
 
 void FPyThreadWorker::AskToStop() {
-	// Set the flag to stop simulation.
-
-	this->m_stop_simulation = true;
+	/* This order is important in order to unlock Run() cycle */
+	this->flag_is_simulation_stopped = true;
+	this->sim_cycle_semaphore->Trigger();
 
 	UE_LOG(LogTemp, Warning, TEXT("[FPyThreadWorker] AskToStop"));
 
 }
 
-/* Simulate with RunSimEventsTick (called in Run() ), get the events with GetRecentEvents */
+/* ~~~~~~~~~~ Command interface ~~~~~~~~~~ */
 
-TArray<uint32> FPyThreadWorker::GetRecentEvents() {
+/* Game thread call to get the simulated data */
+TArray<FGameEvent> FPyThreadWorker::GetRecentEvents() {
 
-	UE_LOG(LogTemp, Warning, TEXT("[GetRecentEvents] lock the mutex"));
+	static FString repr("FPyThreadWorker::GetRecentEvents");
 
-	TArray<uint32> ans_array;
+	TArray<FGameEvent> ans_array;
 	ans_array.Empty();
-	if (this->m_stop_simulation) {
-		UE_LOG(LogTemp, Warning, TEXT("[GetRecentEvents] no simulation running"));
+	if (this->flag_is_simulation_stopped) {
+		UE_LOG(LogTemp, Warning, TEXT("[%s] attempt to get events with a stopped simulation"), *repr);
 		return ans_array;
 	}
 
-	if (this->m_mutex.TryLock()) {
-		UE_LOG(LogTemp, Warning, TEXT("[GetRecentEvents] mutex locked, getting the data"));
+	if (this->recent_events_mutex.TryLock()) {
 		ans_array.Append(this->recent_events);
 		this->recent_events.Empty();
-	}
-	else {
-		UE_LOG(LogTemp, Warning, TEXT("[GetRecentEvents] lock failed, providing with empty list "));
+		this->recent_events_mutex.Unlock();
+		/* Release simulation to go further */
+		this->sim_cycle_semaphore->Trigger();
+
 		return ans_array;
 	}
-
-	UE_LOG(LogTemp, Warning, TEXT("[GetRecentEvents] unlocking the mutex"));
-	this->m_mutex.Unlock();
-	UE_LOG(LogTemp, Warning, TEXT("[GetRecentEvents] mutex unlocked"));
-
-	// Release simulation to go further
-	this->m_semaphore->Trigger();
-
-	return ans_array;
+	else {
+		UE_LOG(LogTemp, Warning, TEXT("[%s] failed to lock recent_events array for read-write access"), *repr);
+		return ans_array;
+	}
 
 }
 
-bool FPyThreadWorker::RunSimEventsTick(float dt) {
+/* ~~~~~~~~~~ Internal logic ~~~~~~~~~~ */
 
-	UE_LOG(LogTemp, Warning, TEXT("[RunSimEventsTick] lock the mutex"));
+bool FPyThreadWorker::DoPython() {
+	this->ThreadSafeRunSimEventsTick(0.1f);
+}
+
+
+
+
+bool FPyThreadWorker::ThreadSafeRunSimEventsTick(float const dt) {
+
+	static FString repr("FPyThreadWorker::RunSimEventsTick");
 
 	/* Lock the possibility to get recent events */
-	if (!this->m_mutex.TryLock()) {
-		UE_LOG(LogTemp, Warning, TEXT("[RunSimEventsTick] Skipping simulation tick"));
+	if (!this->recent_events_mutex.TryLock()) {
+		UE_LOG(LogTemp, Warning, TEXT("[%s] failed to lock recent_events array, skipping simulation tick"), *repr);
 		return false;
 	}
 
-	UE_LOG(LogTemp, Warning, TEXT("[RunSimEventsTick] mutex locked, simulating"));
-
 	/* Fill internal array with recent events (python simulation should
 	be callled here). The aray is emptied when we get the events. */
-	this->recent_events.Add(10);
-	this->recent_events.Add(20);
-	this->recent_events.Add(30);
-	this->recent_events.Add(40);
-	this->recent_events.Add(50);
+	this->CalculateRecentEvents(dt);
 
-	// Emulate delay with simulation calculations
-	UE_LOG(LogTemp, Warning, TEXT("[RunSimEventsTick] Doing cadabra"));
-	FPlatformProcess::Sleep(0.2);
-	UE_LOG(LogTemp, Warning, TEXT("[RunSimEventsTick] Finished cadabra"));
-
-	UE_LOG(LogTemp, Warning, TEXT("[RunSimEventsTick] unlocking the mutex"));
-	this->m_mutex.Unlock();
-	UE_LOG(LogTemp, Warning, TEXT("[RunSimEventsTick] mutex unlocked"));
+	this->recent_events_mutex.Unlock();
 
 	return true;
+}
+
+void FPyThreadWorker::CalculateRecentEvents(float const dt) {
+	 
+	/* Fake setup */
+	static int32 block_count = 1000;
+	static int32 min_events = 0;
+	static int32 max_events = 100;
+	
+	int32 event_num = FMath::RandRange(min_events, max_events);
+
+	for (int32 i = 0; i < event_num; i++) {
+		int32 gid = FMath::RandRange(1, block_count);
+
+		FGameEvent new_event = FGameEvent();
+		new_event.event_description = "hello from another thread";
+		new_event.parent_gid = gid;
+
+		/* Should be already thread sage at the moment */
+		this->recent_events.Add(new_event);
+	}
+
+	// Emulate some delay with simulation calculations
+	//FPlatformProcess::Sleep(0.1);
 
 }

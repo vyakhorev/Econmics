@@ -19,13 +19,13 @@ SimWorldInterface::~SimWorldInterface() {
 	// Stop python in case for some reasons this
 	// instance is deconstructed. However, it's
 	// lifespan is the same as EconGameInstance.
-	this->safeStopPython();
+	this->SafeStopPython();
 }
 
 bool SimWorldInterface::Init() {
 	bool isok = true;
-	isok &= this->safeStartPython();
-	isok &= this->importPyInterfaceModule();
+	isok &= this->SafeStartPython();
+	isok &= this->ImportPyInterfaceModule();
 
 	return isok;
 }
@@ -35,10 +35,10 @@ bool SimWorldInterface::Shutdown() {
 	Py_DECREF(this->py_ue4exec_module);
 	Py_DECREF(this->py_simulation_environment);
 	// Stop Python
-	return this->safeStopPython();
+	return this->SafeStopPython();
 }
 
-TArray<SimGameBlock> SimWorldInterface::getActiveChunk() {
+TArray<SimGameBlock> SimWorldInterface::GetActiveChunk() {
 
 	TArray<SimGameBlock> WorldArray;
 	this->game_block_map.GenerateValueArray(WorldArray);
@@ -46,7 +46,7 @@ TArray<SimGameBlock> SimWorldInterface::getActiveChunk() {
 
 }
 
-bool SimWorldInterface::spawnTestWorld() {
+bool SimWorldInterface::SpawnTestWorld() {
 
 	static const FString repr("SimWorldInterface::spawnTestWorld");
 	
@@ -59,7 +59,7 @@ bool SimWorldInterface::spawnTestWorld() {
 	if (!check_return_value(LevelGeneratorCall, "LevelGeneratorCall")) {
 		// This can happen
 		UE_LOG(LogTemp, Warning, TEXT("[%s] - can't get a callable for level generation"), *repr);
-		this->safeStopPython();
+		this->SafeStopPython();
 		return false;
 	}
 
@@ -69,13 +69,13 @@ bool SimWorldInterface::spawnTestWorld() {
 		// This can happen
 		UE_LOG(LogTemp, Warning, TEXT("[%s] - can't get world instance from the level generator call"), *repr);
 		//Py_DECREF(pSimWorldInstance);
-		this->safeStopPython();
+		this->SafeStopPython();
 		return false;
 	}
 
 	if (check_for_python_error()) {
 		UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with calling the level generator"), *repr);
-		this->safeStopPython();
+		this->SafeStopPython();
 		return false;
 	}
 
@@ -89,7 +89,7 @@ bool SimWorldInterface::spawnTestWorld() {
 
 	if (check_for_python_error() || iterator_over_blocks == NULL) {
 		UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with iteration over blocks"), *repr);
-		this->safeStopPython();
+		this->SafeStopPython();
 		return false;
 	}
 
@@ -97,7 +97,7 @@ bool SimWorldInterface::spawnTestWorld() {
 
 	if (check_for_python_error() || item == NULL) {
 		UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with iteration over blocks - before the loop"), *repr);
-		this->safeStopPython();
+		this->SafeStopPython();
 		return false;
 	}
 
@@ -106,41 +106,41 @@ bool SimWorldInterface::spawnTestWorld() {
 		long x = PyLong_AsLong(PyObject_GetAttrString(item, "x"));
 		if (check_for_python_error()) {
 			UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with x of a block"), *repr);
-			this->safeStopPython();
+			this->SafeStopPython();
 			return false;
 		};
 
 		long y = PyLong_AsLong(PyObject_GetAttrString(item, "y"));
 		if (check_for_python_error()) {
 			UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with y of a block"), *repr);
-			this->safeStopPython();
+			this->SafeStopPython();
 			return false;
 		};
 
 		long z = PyLong_AsLong(PyObject_GetAttrString(item, "z"));
 		if (check_for_python_error()) {
 			UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with z of a block"), *repr);
-			this->safeStopPython();
+			this->SafeStopPython();
 			return false;
 		};
 
 		long gid = PyLong_AsLong(PyObject_GetAttrString(item, "gid"));
 		if (check_for_python_error()) {
 			UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with gid of a block"), *repr);
-			this->safeStopPython();
+			this->SafeStopPython();
 			return false;
 		};
 
 		long cube_type = PyLong_AsLong(PyObject_GetAttrString(item, "cube_type"));
 		if (check_for_python_error()) {
 			UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with cube_type of a block"), *repr);
-			this->safeStopPython();
+			this->SafeStopPython();
 			return false;
 		};
 
 
 		/* Populating the internal map */
-		this->addNewBlock(x, y, z, cube_type, gid);
+		this->AddNewBlock(x, y, z, cube_type, gid);
 
 
 		/* release reference when done */
@@ -149,7 +149,7 @@ bool SimWorldInterface::spawnTestWorld() {
 
 		if (check_for_python_error()) {
 			UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with iteration over blocks - inside the loop"), *repr);
-			this->safeStopPython();
+			this->SafeStopPython();
 			return false;
 		};
 
@@ -162,7 +162,7 @@ bool SimWorldInterface::spawnTestWorld() {
 
 }
 
-bool SimWorldInterface::constructSimulationEnvironment() {
+bool SimWorldInterface::ConstructSimulationEnvironment() {
 
 	static const FString repr("SimWorldInterface::constructSimulationEnvironment");
 
@@ -175,7 +175,7 @@ bool SimWorldInterface::constructSimulationEnvironment() {
 	if (!check_return_value(OurCallable, "OurCallable")) {
 		// This can happen
 		UE_LOG(LogTemp, Warning, TEXT("[%s] - can't get a callable for environment startup"), *repr);
-		this->safeStopPython();
+		this->SafeStopPython();
 		return false;
 	}
 
@@ -183,13 +183,13 @@ bool SimWorldInterface::constructSimulationEnvironment() {
 
 	if (!check_return_value(pEnvInstance, "pEnvInstance")) {
 		UE_LOG(LogTemp, Warning, TEXT("[%s] - can't get environment instance"), *repr);
-		this->safeStopPython();
+		this->SafeStopPython();
 		return false;
 	}
 
 	if (check_for_python_error()) {
 		UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with calling simenv setup"), *repr);
-		this->safeStopPython();
+		this->SafeStopPython();
 		return false;
 	}
 
@@ -202,7 +202,7 @@ bool SimWorldInterface::constructSimulationEnvironment() {
 
 }
 
-bool SimWorldInterface::runSimulationInterval(long interval_tu) {
+bool SimWorldInterface::RunSimulationInterval(long interval_tu) {
 
 	static const FString repr("SimWorldInterface::runSimulationInterval");
 
@@ -214,7 +214,7 @@ bool SimWorldInterface::runSimulationInterval(long interval_tu) {
 	PyObject *OurCallable = PyObject_GetAttrString(this->py_ue4exec_module, "run_simulation_interval");
 	if (!check_return_value(OurCallable, "OurCallable")) {
 		UE_LOG(LogTemp, Warning, TEXT("[%s] - can't get a callable for simulation tick call"), *repr);
-		this->safeStopPython();
+		this->SafeStopPython();
 		return false;
 	}
 
@@ -222,7 +222,7 @@ bool SimWorldInterface::runSimulationInterval(long interval_tu) {
 
 	if (!check_return_value(pEventsList, "pEventsList")) {
 		UE_LOG(LogTemp, Warning, TEXT("[%s] - can't get list of happened events"), *repr);
-		this->safeStopPython();
+		this->SafeStopPython();
 		return false;
 	}
 
@@ -232,7 +232,7 @@ bool SimWorldInterface::runSimulationInterval(long interval_tu) {
 
 	if (check_for_python_error() || iterator_over_events == NULL) {
 		UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with iteration over events"), *repr);
-		this->safeStopPython();
+		this->SafeStopPython();
 		return false;
 	}
 
@@ -240,7 +240,7 @@ bool SimWorldInterface::runSimulationInterval(long interval_tu) {
 
 	if (check_for_python_error()) {
 		UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with iteration over events - before the loop"), *repr);
-		this->safeStopPython();
+		this->SafeStopPython();
 		return false;
 	}
 
@@ -248,11 +248,11 @@ bool SimWorldInterface::runSimulationInterval(long interval_tu) {
 
 	while (ev_i) {
 
-		bool isok = this->registerRecentEvent(ev_i);
+		bool isok = this->RegisterRecentEvent(ev_i);
 
 		if (!isok) {
 			UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with event registration"), *repr);
-			this->safeStopPython();
+			this->SafeStopPython();
 			return false;
 		}
 
@@ -262,7 +262,7 @@ bool SimWorldInterface::runSimulationInterval(long interval_tu) {
 
 		if (check_for_python_error()) {
 			UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with iteration over events - inside the loop"), *repr);
-			this->safeStopPython();
+			this->SafeStopPython();
 			return false;
 		};
 
@@ -275,7 +275,7 @@ bool SimWorldInterface::runSimulationInterval(long interval_tu) {
 }
 
 // A private call when spawning the world
-bool SimWorldInterface::addNewBlock(long relX, long relY, long relZ, long cube_type, long gid) {
+bool SimWorldInterface::AddNewBlock(long relX, long relY, long relZ, long cube_type, long gid) {
 
 	/* A technical call to append to internal collection */
 
@@ -292,14 +292,14 @@ bool SimWorldInterface::addNewBlock(long relX, long relY, long relZ, long cube_t
 
 }
 
-bool SimWorldInterface::registerRecentEvent(PyObject *sim_event) {
+bool SimWorldInterface::RegisterRecentEvent(PyObject *sim_event) {
 
 	static const FString repr("SimWorldInterface::registerRecentEvent");
 
 	PyObject *py_gid = PyObject_CallMethod(sim_event, "get_parent_gid", "()", NULL);
 	if (check_for_python_error()) {
 		UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with get_parent_gid of an event"), *repr);
-		this->safeStopPython();
+		this->SafeStopPython();
 		return false;
 	}
 
@@ -318,7 +318,7 @@ bool SimWorldInterface::registerRecentEvent(PyObject *sim_event) {
 
 /* ~~~~~~~~~~ Private ~~~~~~~~~~~~~~~~~~ */
 
-bool SimWorldInterface::safeStartPython() {
+bool SimWorldInterface::SafeStartPython() {
 
 	static const FString repr("SimWorldInterface::safeStartPython");
 
@@ -340,7 +340,7 @@ bool SimWorldInterface::safeStartPython() {
 
 }
 
-bool SimWorldInterface::safeStopPython() {
+bool SimWorldInterface::SafeStopPython() {
 
 	static const FString repr("SimWorldInterface::safeStopPython");
 
@@ -357,7 +357,7 @@ bool SimWorldInterface::safeStopPython() {
 
 }
 
-bool SimWorldInterface::importPyInterfaceModule() {
+bool SimWorldInterface::ImportPyInterfaceModule() {
 
 	static const FString repr("SimWorldInterface::importPyInterfaceModule");
 
@@ -371,7 +371,7 @@ bool SimWorldInterface::importPyInterfaceModule() {
 	if (!check_return_value(pName, "pName")) {
 		// This would barely happen..
 		UE_LOG(LogTemp, Warning, TEXT("[%s] - can't decode module name"), *repr);
-		this->safeStopPython();
+		this->SafeStopPython();
 		return false;
 	}
 
@@ -380,13 +380,13 @@ bool SimWorldInterface::importPyInterfaceModule() {
 		// This can happen
 		UE_LOG(LogTemp, Warning, TEXT("[%s] - can't import the module"), *repr);
 		Py_DECREF(pName);
-		this->safeStopPython();
+		this->SafeStopPython();
 		return false;
 	}
 
 	if (check_for_python_error()) {
 		UE_LOG(LogTemp, Warning, TEXT("[%s] - can't import the module - error"), *repr);
-		this->safeStopPython();
+		this->SafeStopPython();
 		return false;
 	}
 	Py_DECREF(pName);

@@ -55,8 +55,8 @@ bool UEconGameInstance::GenerateDefaultLevel() {
 
 	UE_LOG(LogTemp, Log, TEXT("[%s] Generating level with Python"), *repr);
 
-	this->sim_world.spawnTestWorld();
-	this->sim_world.constructSimulationEnvironment();
+	this->sim_world.SpawnTestWorld();
+	this->sim_world.ConstructSimulationEnvironment();
 
 	return true;
 
@@ -77,7 +77,7 @@ bool UEconGameInstance::SpawnActorsInActiveChunk() {
 		return false;
 	}
 	
-	TArray<SimGameBlock> chunk_blocks_array = this->sim_world.getActiveChunk();
+	TArray<SimGameBlock> chunk_blocks_array = this->sim_world.GetActiveChunk();
 
 	// We have a reference to the base blueprint class, so we spawn a "child" class of ABaseBlock.
 
@@ -99,9 +99,16 @@ bool UEconGameInstance::SpawnActorsInActiveChunk() {
 }
 
 bool UEconGameInstance::scheduleGameEvent(FGameEvent game_event) {
-	ABaseBlock *an_actor = this->spawned_actors_map[game_event.parent_gid];
-	an_actor->python_simulation_new_event(game_event);
-	return true;
+	if (this->spawned_actors_map.Contains(game_event.parent_gid)) {
+		ABaseBlock *an_actor = this->spawned_actors_map[game_event.parent_gid];
+		an_actor->python_simulation_new_event(game_event);
+		return true;
+	}
+	else {
+		UE_LOG(LogTemp, Warning, TEXT("Can't find an actor with gid=%d"), game_event.parent_gid);
+		return false;
+	}
+	
 }
 
 
@@ -109,7 +116,7 @@ bool UEconGameInstance::RunTestSimulationOnce(int32 time_units) {
 
 	static FString repr("UEconGameInstance::RunTestSimulationOnce");
 
-	bool isok = this->sim_world.runSimulationInterval(time_units);
+	bool isok = this->sim_world.RunSimulationInterval(time_units);
 	if (!isok) {
 		UE_LOG(LogTemp, Warning, TEXT("[%s] - error with next simulation interval"), *repr);
 		return false;
@@ -160,13 +167,13 @@ bool UEconGameInstance::DispatchTestSimulationEvents() {
 
 	// This can lock game thread, so we need to be smart about it.
 	// May be reading a single event is not such a bad idea..
-	TArray<uint32> recent_events = this->simulation_runnable->GetRecentEvents();
+	TArray<FGameEvent> recent_events = this->simulation_runnable->GetRecentEvents();
 
 	UE_LOG(LogTemp, Warning, TEXT("DispatchTestSimulationEvents!!!"));
 
 	for (auto ev_i : recent_events) {
-		// These are test numbers at the moment
-		UE_LOG(LogTemp, Warning, TEXT("Event: %d"), ev_i);
+		/* These are FGameEvent */
+		this->scheduleGameEvent(ev_i);
 	}
 
 	return true;
@@ -186,7 +193,7 @@ bool UEconGameInstance::SetupRegularPullSimEventTimer() {
 	//FTimerDelegate RespawnDelegate = FTimerDelegate::CreateUObject(this, &UEconGameInstance::DispatchTestSimulationEvents);
 
 	this->GetWorld()->GetTimerManager().SetTimer(this->simulation_checkup_timer_handle,
-		this, &UEconGameInstance::TestTimerCall, 0.5f, true);
+		this, &UEconGameInstance::TestTimerCall, 0.1f, true);
 
 	return true;
 
