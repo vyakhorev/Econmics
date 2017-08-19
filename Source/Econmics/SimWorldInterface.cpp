@@ -202,7 +202,7 @@ bool SimWorldInterface::ConstructSimulationEnvironment() {
 
 }
 
-bool SimWorldInterface::RunSimulationInterval(long interval_tu) {
+bool SimWorldInterface::RunSimulationInterval(float interval_tu) {
 
 	static const FString repr("SimWorldInterface::runSimulationInterval");
 
@@ -218,7 +218,8 @@ bool SimWorldInterface::RunSimulationInterval(long interval_tu) {
 		return false;
 	}
 
-	PyObject *pEventsList = PyObject_CallFunction(OurCallable, "(Ol)", this->py_simulation_environment, interval_tu);
+	//UE_LOG(LogTemp, Warning, TEXT("[%s] - simulating next %f sim ticks"), *repr, interval_tu);
+	PyObject *pEventsList = PyObject_CallFunction(OurCallable, "(Of)", this->py_simulation_environment, interval_tu);
 
 	if (!check_return_value(pEventsList, "pEventsList")) {
 		UE_LOG(LogTemp, Warning, TEXT("[%s] - can't get list of happened events"), *repr);
@@ -303,12 +304,21 @@ bool SimWorldInterface::RegisterRecentEvent(PyObject *sim_event) {
 		return false;
 	}
 
-	// Register which block 'received' an event
-	long gid = PyLong_AsLong(py_gid);
+	PyObject *py_role = PyObject_CallMethod(sim_event, "get_behaviour_role", "()", NULL);
+	if (check_for_python_error()) {
+		UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with get_behaviour_role of an event"), *repr);
+		this->SafeStopPython();
+		return false;
+	}
 
-	FGameEvent new_event = FGameEvent();
-	new_event.event_description = "hello from python cEvent";
+	// Register which block 'received' an event
+	int32 gid = PyLong_AsLong(py_gid);
+	// Register which component (=behaviour) should be updated
+	int32 role = PyLong_AsLong(py_role);
+
+	FPySimGameEvent new_event = FPySimGameEvent();
 	new_event.parent_gid = gid;
+	new_event.behaviour_role = role;
 
 	this->recent_events.Add(new_event);
 
@@ -399,4 +409,5 @@ bool SimWorldInterface::ImportPyInterfaceModule() {
 	// ~~~
 
 	return true;
+
 }

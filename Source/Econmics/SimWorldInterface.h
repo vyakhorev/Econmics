@@ -3,7 +3,7 @@
 #pragma once
 #include <string>
 #include "SharedPy.h"
-#include "EvStruct.h" // for FGameEvent structure, this is how we animate simulation events
+#include "EvStruct.h" // for FPySimGameEvent structure, this is how we animate simulation events
 
 using namespace std;
 
@@ -14,11 +14,6 @@ struct SimGameBlock {
 	long relZ;
 	long cube_type;
 	long gid;
-
-	/* Holds a reference to the parent spawned actor,
-	it's actor responsibility to connect and disconnect
-	from a SimGameBlock */
-	//AStaticMeshActor parent_actor;
 
 	SimGameBlock() {
 		relX = 0;
@@ -56,8 +51,8 @@ public:
 	bool ConstructSimulationEnvironment();
 
 	/* Test simulation */
-	bool RunSimulationInterval(long interval_tu);
-	TArray<FGameEvent> recent_events;
+	bool RunSimulationInterval(float interval_tu);
+	TArray<FPySimGameEvent> recent_events;
 
 	/* A way to pass and buffer the world in the C++ memory,
 	iterator over Python data would be better... */

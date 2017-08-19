@@ -10,6 +10,9 @@ FPyThreadWorker::FPyThreadWorker() {
 	/* A flag to stop the Run() loop. */
 	this->flag_is_simulation_stopped = false;
 
+	/* Default timescale of simulation */
+	this->sim_time_timescale = 1.0f;
+
 }
 
 FPyThreadWorker::~FPyThreadWorker() {
@@ -25,16 +28,19 @@ FPyThreadWorker::~FPyThreadWorker() {
 bool FPyThreadWorker::Init() {
 
 	this->recent_events.Empty();
-	return true;
+
+	/* Start python interface (it would start python as well,
+	however, python lifespan in memory is sim_world's
+	responsibility. */
+	this->sim_world = SimWorldInterface();
+	bool python_started = this->sim_world.Init();  // starts python (so that it starts in a separate thread
+
+	return python_started;
 
 }
 
 uint32 FPyThreadWorker::Run() {
 
-	/* First simulation iteration */
-	if (!this->flag_is_simulation_stopped) {
-		this->DoPython();
-	}
 
 	while (!this->flag_is_simulation_stopped) {
 		/* Straight forward implementation: do the tick and wait.
@@ -42,18 +48,32 @@ uint32 FPyThreadWorker::Run() {
 		be triggered when the game thread calls GetRecentEvents().
 		We have to wait first so that AskToStop() would work. */
 		this->sim_cycle_semaphore->Wait();
-		this->DoPython();
+		this->ApplyPythonSimulationTick();
 	}
+
+	UE_LOG(LogTemp, Warning, TEXT("[FPyThreadWorker] Stopped running"));
 
 	return 0;
 }
 
 void FPyThreadWorker::Stop() {
+	/* It's important to have Stop() separted from AskToStop() since 
+	at this point the Run() is finished and we can safely stop python
+	from the same thread that started it. Otherwise we may have python
+	commands being called after we finilized python itself which 
+	will result in a crash. */
 
 	UE_LOG(LogTemp, Warning, TEXT("[FPyThreadWorker] Stop"));
 
+	/* Stop python interface. This means shutting down python as well.
+	Without this call python memory somehow stays between calls,
+	very dramatic bugs I had those times.. */
+	this->sim_world.Shutdown();
+	
 }
 
+/* Game thread call to ensure that Run() would soon stop and
+the game thread would succeed with waiting for termination */
 void FPyThreadWorker::AskToStop() {
 	/* This order is important in order to unlock Run() cycle */
 	this->flag_is_simulation_stopped = true;
@@ -63,14 +83,31 @@ void FPyThreadWorker::AskToStop() {
 
 }
 
+
 /* ~~~~~~~~~~ Command interface ~~~~~~~~~~ */
 
+/* Game thread call to indicate the fact that we've changed
+the planet (=chunk) 
+!!! It's very important to call this only when the timer is
+suspended (otherwise we'll have 2 threads trying to call
+python functions. */
+bool FPyThreadWorker::SetActiveChunk(uint32 chunk_gid) {
+	this->sim_world.SpawnTestWorld();
+	this->sim_world.ConstructSimulationEnvironment();
+	return true;
+}
+
+/* Game thread call to get active chunk */
+TArray<SimGameBlock> FPyThreadWorker::GetActiveChunk() {
+	return this->sim_world.GetActiveChunk();
+}
+
 /* Game thread call to get the simulated data */
-TArray<FGameEvent> FPyThreadWorker::GetRecentEvents() {
+TArray<FPySimGameEvent> FPyThreadWorker::GetRecentEvents() {
 
 	static FString repr("FPyThreadWorker::GetRecentEvents");
 
-	TArray<FGameEvent> ans_array;
+	TArray<FPySimGameEvent> ans_array;
 	ans_array.Empty();
 	if (this->flag_is_simulation_stopped) {
 		UE_LOG(LogTemp, Warning, TEXT("[%s] attempt to get events with a stopped simulation"), *repr);
@@ -93,16 +130,26 @@ TArray<FGameEvent> FPyThreadWorker::GetRecentEvents() {
 
 }
 
-/* ~~~~~~~~~~ Internal logic ~~~~~~~~~~ */
+/* Game thread call to change simulation speed or even pause the simulation */
+void FPyThreadWorker::SetSimulationSpeed(int32 new_speed) {
+	this->sim_time_per_tick = new_speed * this->sim_time_timescale;
+	//UE_LOG(LogTemp, Warning, TEXT("new sim_time_per_tick = %f"), this->sim_time_per_tick);
+}
 
-bool FPyThreadWorker::DoPython() {
-	this->ThreadSafeRunSimEventsTick(0.1f);
+/* Game thread call to change timescale of SetSimulationSpeed calls */
+void FPyThreadWorker::SetSimulationSpeedTimeScale(float timescale) {
+	this->sim_time_timescale = timescale;
 }
 
 
+/* ~~~~~~~~~~ Internal logic ~~~~~~~~~~ */
+
+void FPyThreadWorker::ApplyPythonSimulationTick() {
+	this->ThreadSafeRunSimEventsTick(this->sim_time_per_tick);
+}
 
 
-bool FPyThreadWorker::ThreadSafeRunSimEventsTick(float const dt) {
+bool FPyThreadWorker::ThreadSafeRunSimEventsTick(float dt) {
 
 	static FString repr("FPyThreadWorker::RunSimEventsTick");
 
@@ -121,27 +168,9 @@ bool FPyThreadWorker::ThreadSafeRunSimEventsTick(float const dt) {
 	return true;
 }
 
-void FPyThreadWorker::CalculateRecentEvents(float const dt) {
-	 
-	/* Fake setup */
-	static int32 block_count = 1000;
-	static int32 min_events = 0;
-	static int32 max_events = 100;
-	
-	int32 event_num = FMath::RandRange(min_events, max_events);
+void FPyThreadWorker::CalculateRecentEvents(float dt) {
 
-	for (int32 i = 0; i < event_num; i++) {
-		int32 gid = FMath::RandRange(1, block_count);
-
-		FGameEvent new_event = FGameEvent();
-		new_event.event_description = "hello from another thread";
-		new_event.parent_gid = gid;
-
-		/* Should be already thread sage at the moment */
-		this->recent_events.Add(new_event);
-	}
-
-	// Emulate some delay with simulation calculations
-	//FPlatformProcess::Sleep(0.1);
+	this->sim_world.RunSimulationInterval(dt);
+	this->recent_events.Append(this->sim_world.recent_events);
 
 }
