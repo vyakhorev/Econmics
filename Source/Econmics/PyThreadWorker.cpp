@@ -93,7 +93,6 @@ suspended (otherwise we'll have 2 threads trying to call
 python functions. */
 bool FPyThreadWorker::SetActiveChunk(uint32 chunk_gid) {
 	this->sim_world.SpawnTestWorld();
-	this->sim_world.ConstructSimulationEnvironment();
 	return true;
 }
 

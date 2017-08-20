@@ -173,6 +173,7 @@ bool UEconGameInstance::SpawnActorsInActiveChunk() {
 		SpawnInfo.bDeferConstruction = 1;  // We want to run it after we set the block type - so that, after the spawn.
 
 		ABaseBlock *BPActor = World->SpawnActor<ABaseBlock>(this->BlockBaseBlueprintClass, position, FRotator::ZeroRotator, SpawnInfo);
+		//UE_LOG(LogTemp, Warning, TEXT("[%s] - cube type is %d"), *repr, GB_i.cube_type);
 		BPActor->cube_type = GB_i.cube_type;
 		BPActor->gid = GB_i.gid;
 		BPActor->RerunConstructionScripts();  // Run the thing

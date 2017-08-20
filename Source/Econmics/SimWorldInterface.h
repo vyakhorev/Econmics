@@ -3,7 +3,9 @@
 #pragma once
 #include <string>
 #include "SharedPy.h"
-#include "EvStruct.h" // for FPySimGameEvent structure, this is how we animate simulation events
+#include "EvStruct.h"  // for FPySimGameEvent structure to be informed about events
+// Simulation states
+//#include "BehComponents/BehBlooming.h"
 
 using namespace std;
 
@@ -47,12 +49,14 @@ public:
 	/* Returns the spawned world */
 	TArray<SimGameBlock> GetActiveChunk();
 
-	/* Test simulation. Constructs simulation environment */
-	bool ConstructSimulationEnvironment();
-
-	/* Test simulation */
+	/* Simulation call */
 	bool RunSimulationInterval(float interval_tu);
 	TArray<FPySimGameEvent> recent_events;
+
+	/* Collect updates about cube states */
+	bool GatherAnimationUpdates();
+	//TArray<FPyBehBlooming> beh_100_updates;
+
 
 	/* A way to pass and buffer the world in the C++ memory,
 	iterator over Python data would be better... */
@@ -75,14 +79,13 @@ private:
 
 	/* imports and links ue4exec.py */
 	bool ImportPyInterfaceModule();
-	
-	/* A link to the cSimWorld instance */
-	PyObject *py_world_instance;
+
+	/* A reference to cSimulationController instance */
+	PyObject *py_simulation_controller;
+
 	/* A link to the ue4exec.py module. All the python calls should be
 	available from that module. */
 	PyObject *py_ue4exec_module;
-	/* A link to cSimEnvironment with started world simulation */
-	PyObject *py_simulation_environment;
 
 };
 
