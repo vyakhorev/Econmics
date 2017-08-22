@@ -6,6 +6,7 @@
 FPyThreadWorker::FPyThreadWorker() {
 
 	this->sim_cycle_semaphore = FGenericPlatformProcess::GetSynchEventFromPool(false);
+	this->data_cycle_semaphore = FGenericPlatformProcess::GetSynchEventFromPool(false);
 
 	/* A flag to stop the Run() loop. */
 	this->flag_is_simulation_stopped = false;
@@ -21,6 +22,11 @@ FPyThreadWorker::~FPyThreadWorker() {
 	if (this->sim_cycle_semaphore) {
 		FGenericPlatformProcess::ReturnSynchEventToPool(this->sim_cycle_semaphore);
 		this->sim_cycle_semaphore = nullptr;
+	}
+
+	if (this->data_cycle_semaphore) {
+		FGenericPlatformProcess::ReturnSynchEventToPool(this->data_cycle_semaphore);
+		this->data_cycle_semaphore = nullptr;
 	}
 
 }
@@ -41,13 +47,17 @@ bool FPyThreadWorker::Init() {
 
 uint32 FPyThreadWorker::Run() {
 
+	// !!! NOTE. this is not the best possible design. We don't need events actually.
+	// But we should be able to advance simulation futher without receiving anything
+	// (optimisations for very high speed).
 
 	while (!this->flag_is_simulation_stopped) {
 		/* Straight forward implementation: do the tick and wait.
 		A lot of optimisations available here. Semafore would
 		be triggered when the game thread calls GetRecentEvents().
 		We have to wait first so that AskToStop() would work. */
-		this->sim_cycle_semaphore->Wait();
+		this->sim_cycle_semaphore->Wait();  // GetRecentEvents()
+		this->data_cycle_semaphore->Wait();  // GetDataUpdates()
 		this->ApplyPythonSimulationTick();
 	}
 
@@ -78,6 +88,7 @@ void FPyThreadWorker::AskToStop() {
 	/* This order is important in order to unlock Run() cycle */
 	this->flag_is_simulation_stopped = true;
 	this->sim_cycle_semaphore->Trigger();
+	this->data_cycle_semaphore->Trigger();
 
 	UE_LOG(LogTemp, Warning, TEXT("[FPyThreadWorker] AskToStop"));
 
@@ -110,7 +121,7 @@ TArray<FPySimGameEvent> FPyThreadWorker::GetRecentEvents() {
 	ans_array.Empty();
 	if (this->flag_is_simulation_stopped) {
 		UE_LOG(LogTemp, Warning, TEXT("[%s] attempt to get events with a stopped simulation"), *repr);
-		return ans_array;
+		return ans_array; 
 	}
 
 	if (this->recent_events_mutex.TryLock()) {
@@ -124,6 +135,39 @@ TArray<FPySimGameEvent> FPyThreadWorker::GetRecentEvents() {
 	}
 	else {
 		UE_LOG(LogTemp, Warning, TEXT("[%s] failed to lock recent_events array for read-write access"), *repr);
+		return ans_array;
+	}
+
+}
+
+TArray<TSharedPtr<FPyBasicBehaviour, ESPMode::ThreadSafe>> FPyThreadWorker::GetDataUpdates() {
+	
+	static FString repr("FPyThreadWorker::GetDataUpdates");
+
+	TArray<TSharedPtr<FPyBasicBehaviour, ESPMode::ThreadSafe>> ans_array;
+	ans_array.Empty();
+	if (this->flag_is_simulation_stopped) {
+		UE_LOG(LogTemp, Warning, TEXT("[%s] attempt to get data updates with a stopped simulation"), *repr);
+		return ans_array;
+	}
+
+	if (this->data_updates_mutex.TryLock()) {
+		// !!! send pointers from a thread to thread. Most probably, this won't work!
+		// They say one can use std:shared_ptr.  
+		// https://stackoverflow.com/questions/11030817/passing-pointers-to-threads-without-being-out-of-scope
+		// I use UE4 pointers
+		// https://answers.unrealengine.com/questions/330271/how-would-i-go-about-making-an-fvector-thread-safe.html
+		ans_array.Append(this->data_updates);
+		this->data_updates.Empty();
+		this->data_updates_mutex.Unlock();
+		/* Release simulation to go futher */
+		this->data_cycle_semaphore->Trigger();
+
+		return ans_array;
+
+	}
+	else {
+		UE_LOG(LogTemp, Warning, TEXT("[%s] failed to lock data_updates array for read-write access"), *repr);
 		return ans_array;
 	}
 
@@ -145,8 +189,8 @@ void FPyThreadWorker::SetSimulationSpeedTimeScale(float timescale) {
 
 void FPyThreadWorker::ApplyPythonSimulationTick() {
 	this->ThreadSafeRunSimEventsTick(this->sim_time_per_tick);
+	this->ThreadSafeGatherAnimationData();
 }
-
 
 bool FPyThreadWorker::ThreadSafeRunSimEventsTick(float dt) {
 
@@ -171,5 +215,30 @@ void FPyThreadWorker::CalculateRecentEvents(float dt) {
 
 	this->sim_world.RunSimulationInterval(dt);
 	this->recent_events.Append(this->sim_world.recent_events);
+
+}
+
+bool FPyThreadWorker::ThreadSafeGatherAnimationData() {
+	static FString repr("FPyThreadWorker::ThreadSafeGatherAnimationData");
+
+	/* Lock the possibility to get recent events */
+	if (!this->data_updates_mutex.TryLock()) {
+		UE_LOG(LogTemp, Warning, TEXT("[%s] failed to lock data_updates array, skipping data update"), *repr);
+		return false;
+	}
+
+	/* Fill internal array with data updates. It's emptied when the client calls GetDataUpdates() */
+	this->GatherAnimationData();
+
+	this->data_updates_mutex.Unlock();
+
+	return true;
+
+}
+
+void FPyThreadWorker::GatherAnimationData() {
+
+	this->sim_world.GatherAnimationUpdates();
+	this->data_updates.Append(this->sim_world.behaviour_updates);
 
 }

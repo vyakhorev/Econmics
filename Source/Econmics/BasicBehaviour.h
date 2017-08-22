@@ -1,10 +1,10 @@
 #pragma once
 
-#include "BehBlooming.generated.h"
+#include "BasicBehaviour.generated.h"
 
 /* Holds binary information about whether or not the object is blooming */
 USTRUCT(BlueprintType)
-struct ECONMICS_API FPyBehBlooming {
+struct ECONMICS_API FPyBasicBehaviour {
 
 	GENERATED_BODY()
 
@@ -19,13 +19,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Simulation glue")
 	int32 behaviour_role;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Simulation glue")
-	bool is_blooming;
-
-	FPyBehBlooming() {
+	FPyBasicBehaviour() {
 		behaviour_role = 0;
 		parent_gid = 0;
-		is_blooming = false;
 	};
 
 };

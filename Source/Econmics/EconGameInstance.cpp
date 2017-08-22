@@ -176,8 +176,13 @@ bool UEconGameInstance::SpawnActorsInActiveChunk() {
 		//UE_LOG(LogTemp, Warning, TEXT("[%s] - cube type is %d"), *repr, GB_i.cube_type);
 		BPActor->cube_type = GB_i.cube_type;
 		BPActor->gid = GB_i.gid;
-		BPActor->RerunConstructionScripts();  // Run the thing
+		// BPActor->RerunConstructionScripts();  // Do it later
 		this->spawned_actors_map.Add(GB_i.gid, BPActor);
+	}
+
+	/* Setup materials after the spawn */
+	for (auto& Elem : this->spawned_actors_map) {
+		Elem.Value->RerunConstructionScripts();
 	}
 
 	return true;
@@ -244,7 +249,9 @@ void UEconGameInstance::PeriodicSimulationTimerCall() {
 		UE_LOG(LogTemp, Warning, TEXT("A timer call on pause"));
 		return;
 	}
+
 	this->GetAndScheduleSimulationEventsFromBackgroundThread();
+
 }
 
 // Communicate with python
@@ -254,18 +261,27 @@ bool UEconGameInstance::GetAndScheduleSimulationEventsFromBackgroundThread() {
 		return false;
 	}
 
+	// After these two calls we release the simulation, so that it does not wait
+	// for hashmaps to route the data to actors.
 	TArray<FPySimGameEvent> recent_events = this->simulation_runnable->GetRecentEvents();
+	TArray<TSharedPtr<FPyBasicBehaviour, ESPMode::ThreadSafe>> data_updates = this->simulation_runnable->GetDataUpdates();
+	
+	// FIXME: we don't need two repeatative lookups of actors. But we can't fix it here.
 
 	for (auto ev_i : recent_events) {
 		/* These are FPySimGameEvent */
 		this->ScheduleBPAnimationOfSimulationEvent(ev_i);
 	}
 
+	for (auto data_i : data_updates) {
+		this->ScheduleBPAnimationDataUpdate(data_i);
+	}
+
 	return true;
 
 }
 
-// Animate an event
+// Animate an event - not very useful though
 bool UEconGameInstance::ScheduleBPAnimationOfSimulationEvent(FPySimGameEvent game_event) {
 	if (this->spawned_actors_map.Contains(game_event.parent_gid)) {
 		ABaseBlock *an_actor = this->spawned_actors_map[game_event.parent_gid];
@@ -276,5 +292,17 @@ bool UEconGameInstance::ScheduleBPAnimationOfSimulationEvent(FPySimGameEvent gam
 		UE_LOG(LogTemp, Warning, TEXT("Can't find an actor with gid=%d"), game_event.parent_gid);
 		return false;
 	}
+}
 
+
+bool UEconGameInstance::ScheduleBPAnimationDataUpdate(TSharedPtr<FPyBasicBehaviour, ESPMode::ThreadSafe> behaviour_data_update) {
+	if (this->spawned_actors_map.Contains(behaviour_data_update->parent_gid)) {
+		ABaseBlock *an_actor = this->spawned_actors_map[behaviour_data_update->parent_gid];
+		an_actor->ApplyPyDataUpdate(behaviour_data_update);
+		return true;
+	}
+	else {
+		UE_LOG(LogTemp, Warning, TEXT("Can't find an actor with gid=%d"), behaviour_data_update->parent_gid);
+		return false;
+	}
 }

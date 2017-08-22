@@ -184,6 +184,25 @@ bool SimWorldInterface::SpawnTestWorld() {
 
 
 
+// A private call when spawning the world
+bool SimWorldInterface::AddNewBlock(long relX, long relY, long relZ, long cube_type, long gid) {
+
+	/* A technical call to append to internal collection */
+
+	SimGameBlock new_block = SimGameBlock();
+	new_block.relX = relX;
+	new_block.relY = relY;
+	new_block.relZ = relZ;
+	new_block.cube_type = cube_type;
+	new_block.gid = gid;
+
+	this->game_block_map.Add(gid, new_block);
+
+	return true;
+
+}
+
+
 bool SimWorldInterface::RunSimulationInterval(float interval_tu) {
 
 	static const FString repr("SimWorldInterface::RunSimulationInterval");
@@ -254,128 +273,6 @@ bool SimWorldInterface::RunSimulationInterval(float interval_tu) {
 
 }
 
-// TODO later
-bool SimWorldInterface::GatherAnimationUpdates() {
-
-	static const FString repr("SimWorldInterface::GatherAnimationUpdates");
-
-	if (this->py_simulation_controller == NULL) {
-		UE_LOG(LogTemp, Warning, TEXT("[%s] - can't work without controller"), *repr);
-		return false;
-	}
-
-	if (!this->is_python_working) {
-		UE_LOG(LogTemp, Warning, TEXT("[%s] - can't work without python"), *repr);
-		return false;
-	}
-
-	PyObject *preiterator = PyObject_CallMethod(this->py_simulation_controller, "iterate_over_animation_updates", "()", NULL);
-
-	if (check_for_python_error() || preiterator == NULL) {
-		UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with iteration over animation updates"), *repr);
-		this->SafeStopPython();
-		return false;
-	}
-
-	PyObject *iterator_over_updates = PyObject_GetIter(preiterator);
-
-	if (check_for_python_error() || iterator_over_updates == NULL) {
-		UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with iteration over animation updates"), *repr);
-		this->SafeStopPython();
-		return false;
-	}
-
-	PyObject *item = PyIter_Next(iterator_over_updates);  // Will it return NULL if there are no updates?..
-
-	if (item == NULL) {
-		UE_LOG(LogTemp, Warning, TEXT("[%s] - item is NULL"), *repr);
-	}
-
-	if (check_for_python_error()) {
-		UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with iteration over animation updates - before the loop"), *repr);
-		this->SafeStopPython();
-		return false;
-	}
-
-	while (item) {
-
-	// TODO THIS THING
-
-	//	long x = PyLong_AsLong(PyObject_GetAttrString(item, "x"));
-	//	if (check_for_python_error()) {
-	//		UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with x of a block"), *repr);
-	//		this->SafeStopPython();
-	//		return false;
-	//	};
-
-	//	long y = PyLong_AsLong(PyObject_GetAttrString(item, "y"));
-	//	if (check_for_python_error()) {
-	//		UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with y of a block"), *repr);
-	//		this->SafeStopPython();
-	//		return false;
-	//	};
-
-	//	long z = PyLong_AsLong(PyObject_GetAttrString(item, "z"));
-	//	if (check_for_python_error()) {
-	//		UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with z of a block"), *repr);
-	//		this->SafeStopPython();
-	//		return false;
-	//	};
-
-	//	long gid = PyLong_AsLong(PyObject_GetAttrString(item, "gid"));
-	//	if (check_for_python_error()) {
-	//		UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with gid of a block"), *repr);
-	//		this->SafeStopPython();
-	//		return false;
-	//	};
-
-	//	long cube_type = PyLong_AsLong(PyObject_GetAttrString(item, "cube_type"));
-	//	if (check_for_python_error()) {
-	//		UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with cube_type of a block"), *repr);
-	//		this->SafeStopPython();
-	//		return false;
-	//	};
-
-
-	//	/* Populating the internal map */
-	//	this->AddNewBlock(x, y, z, cube_type, gid);
-
-	//	/* release reference when done */
-		Py_DECREF(item);
-		item = PyIter_Next(iterator_over_updates);
-
-		if (check_for_python_error()) {
-			UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with iteration over updates - inside the loop"), *repr);
-			this->SafeStopPython();
-			return false;
-		};
-
-	}
-
-	Py_DECREF(iterator_over_updates);
-
-	return true;
-
-}
-
-
-// A private call when spawning the world
-bool SimWorldInterface::AddNewBlock(long relX, long relY, long relZ, long cube_type, long gid) {
-
-	/* A technical call to append to internal collection */
-
-	SimGameBlock new_block = SimGameBlock();
-	new_block.relX = relX;
-	new_block.relY = relY;
-	new_block.relZ = relZ;
-	new_block.cube_type = cube_type;
-	new_block.gid = gid;
-
-	this->game_block_map.Add(gid, new_block);
-
-	return true;
-
-}
 
 bool SimWorldInterface::RegisterRecentEvent(PyObject *sim_event) {
 
@@ -409,6 +306,122 @@ bool SimWorldInterface::RegisterRecentEvent(PyObject *sim_event) {
 	return true;
 
 }
+
+
+bool SimWorldInterface::GatherAnimationUpdates() {
+
+	static const FString repr("SimWorldInterface::GatherAnimationUpdates");
+
+	if (this->py_simulation_controller == NULL) {
+		UE_LOG(LogTemp, Warning, TEXT("[%s] - can't work without controller"), *repr);
+		return false;
+	}
+
+	if (!this->is_python_working) {
+		UE_LOG(LogTemp, Warning, TEXT("[%s] - can't work without python"), *repr);
+		return false;
+	}
+
+	PyObject *preiterator = PyObject_CallMethod(this->py_simulation_controller, "iterate_over_animation_updates", "()", NULL);
+
+	if (check_for_python_error() || preiterator == NULL) {
+		UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with iteration over animation updates"), *repr);
+		this->SafeStopPython();
+		return false;
+	}
+
+	PyObject *iterator_over_updates = PyObject_GetIter(preiterator);
+
+	if (check_for_python_error() || iterator_over_updates == NULL) {
+		UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with iteration over animation updates"), *repr);
+		this->SafeStopPython();
+		return false;
+	}
+
+	PyObject *item = PyIter_Next(iterator_over_updates);  //It will return NULL if there are no updates
+
+	if (check_for_python_error()) {
+		UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with iteration over animation updates - before the loop"), *repr);
+		this->SafeStopPython();
+		return false;
+	}
+
+	// We buffer updates in PyThreadWorker in case the game thread didn't collect it yet.
+	this->behaviour_updates.Empty();
+
+	while (item) {
+
+		/* Populate internal array */
+		bool isok = this->RegisterAnimationUpdate(item);
+		if (!isok) {
+			UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with animation update registration"), *repr);
+			this->SafeStopPython();
+			return false;
+		}
+
+		/* release reference when done */
+		Py_DECREF(item);
+		item = PyIter_Next(iterator_over_updates);
+
+		if (check_for_python_error()) {
+			UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with iteration over updates - inside the loop"), *repr);
+			this->SafeStopPython();
+			return false;
+		};
+
+	}
+
+	Py_DECREF(iterator_over_updates);
+
+	return true;
+
+}
+
+bool SimWorldInterface::RegisterAnimationUpdate(PyObject *update_tuple) {
+
+	static const FString repr("SimWorldInterface::RegisterAnimationUpdate");
+
+	long gid = PyLong_AsLong(PyTuple_GetItem(update_tuple, 0));
+	if (check_for_python_error()) {
+		UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with gid of animation update"), *repr);
+		this->SafeStopPython();
+		return false;
+	};
+
+	long role = PyLong_AsLong(PyTuple_GetItem(update_tuple, 1));
+	if (check_for_python_error()) {
+		UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with role of animation update"), *repr);
+		this->SafeStopPython();
+		return false;
+	};
+
+	if (role == 100) {
+		// Construct object. This will let this pointer to own the object.
+		// The structure shall be deleted when the pointer is out of scope
+		// (it's passed all the way to the actor, deleted when new update
+		// arrives, so it's important to have it thread safe since the
+		// buffer array will be emptied on every tick).
+		TSharedPtr<FPyBehBlooming, ESPMode::ThreadSafe> new_update(new FPyBehBlooming);
+		new_update->parent_gid = gid;
+		new_update->behaviour_role = role;
+
+		new_update->is_blooming = true;  // TODO: read from python
+
+		this->behaviour_updates.Add(new_update);
+	}
+	else {
+		UE_LOG(LogTemp, Warning, TEXT("[%s] - failed to find role %d"), *repr, role);
+		TSharedPtr<FPyBasicBehaviour, ESPMode::ThreadSafe> new_update(new FPyBasicBehaviour);
+		new_update->parent_gid = gid;
+		new_update->behaviour_role = role;
+
+		this->behaviour_updates.Add(new_update);
+	};
+	
+	return true;
+
+}
+
 
 /* ~~~~~~~~~~ Private ~~~~~~~~~~~~~~~~~~ */
 

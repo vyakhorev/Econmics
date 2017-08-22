@@ -5,7 +5,8 @@
 #include "SharedPy.h"
 #include "EvStruct.h"  // for FPySimGameEvent structure to be informed about events
 // Simulation states
-//#include "BehComponents/BehBlooming.h"
+#include "AllBehaviours.h"
+
 
 using namespace std;
 
@@ -53,13 +54,16 @@ public:
 	bool RunSimulationInterval(float interval_tu);
 	TArray<FPySimGameEvent> recent_events;
 
-	/* Collect updates about cube states */
+	/* Collect updates about cube states inside this object */
 	bool GatherAnimationUpdates();
-	//TArray<FPyBehBlooming> beh_100_updates;
 
+	/* Store animation updates in a buffer. With a very scary typename. 
+	This thing shall keep counting refences to behaviours even when there
+	are in other thread (otherwise I received garbage data). */
+	TArray<TSharedPtr<FPyBasicBehaviour, ESPMode::ThreadSafe>> behaviour_updates;
+	//TArray<FPyBasicBehaviour*> behaviour_updates;
 
-	/* A way to pass and buffer the world in the C++ memory,
-	iterator over Python data would be better... */
+	/* A way to pass and buffer the world in C++ memory from Python. */
 	TMap<long, SimGameBlock> game_block_map;
 
 
@@ -70,6 +74,9 @@ private:
 
 	/* Adds a simulation event into internal TArray */
 	bool RegisterRecentEvent(PyObject *sim_event);
+
+	/* Adds animation update to internal buffer */
+	bool RegisterAnimationUpdate(PyObject *update_tuple);
 
 	/* Starts python only if not is_python_working */
 	bool SafeStartPython();

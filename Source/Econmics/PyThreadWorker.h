@@ -33,6 +33,9 @@ public:
 	periodically (not too often).*/
 	TArray<FPySimGameEvent> GetRecentEvents();
 
+	/* Returns data updates. Not sure if we need raw events. */
+	TArray<TSharedPtr<FPyBasicBehaviour, ESPMode::ThreadSafe>> GetDataUpdates();
+
 	/* A command to change the active chunk (would load / generate it
 	in Python memory) */
 	bool SetActiveChunk(uint32 chunk_gid);
@@ -94,9 +97,25 @@ private:
 	how it works though. */
 	FThreadSafeBool flag_is_simulation_stopped;
 
-	/* ~~~~~~~~~~ World generation handling  ~~~~~~~~~~  */
+	/* ~~~~~~~~~~ Animation (data) updates ~~~~~~~~~~  */
 
+	/* Mutex over data_updates array */
+	FCriticalSection data_updates_mutex;
 
+	/* Holds all the data updates that were received from python. 
+	sim_world empties it's array every tick. If the game thread
+	is not synchronised with this thread, data could be lost.
+	That's why I added additional buffer. We can get rid of it. */
+	TArray<TSharedPtr<FPyBasicBehaviour, ESPMode::ThreadSafe>> data_updates;
+
+	/* Main cycle wait for this semaphore as well. */
+	FEvent *data_cycle_semaphore;
+
+	/* Data collection threadsafe wrapper */
+	bool ThreadSafeGatherAnimationData();
+
+	/* Data collection itself */
+	void GatherAnimationData();
 
 
 };
