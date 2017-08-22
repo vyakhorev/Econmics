@@ -3,9 +3,13 @@
 #pragma once
 #include <string>
 #include "SharedPy.h"
-#include "EvStruct.h"  // for FPySimGameEvent structure to be informed about events
 // Simulation states
-#include "AllBehaviours.h"
+#include "BasicBehaviour.h"
+#include "BehBlooming.h"
+#include "BehTemperature.h"
+#include "BehVapors.h"
+#include "BehChemistry.h"
+#include "BehBiomass.h"
 
 
 using namespace std;
@@ -50,9 +54,8 @@ public:
 	/* Returns the spawned world */
 	TArray<SimGameBlock> GetActiveChunk();
 
-	/* Simulation call */
+	/* Progress the simulation futher */
 	bool RunSimulationInterval(float interval_tu);
-	TArray<FPySimGameEvent> recent_events;
 
 	/* Collect updates about cube states inside this object */
 	bool GatherAnimationUpdates();
@@ -72,10 +75,8 @@ private:
 	/* Adds the block to the internal map. This arhitecture should be tuned somehow.. */
 	bool AddNewBlock(long relX, long relY, long relZ, long cube_type, long gid);
 
-	/* Adds a simulation event into internal TArray */
-	bool RegisterRecentEvent(PyObject *sim_event);
-
-	/* Adds animation update to internal buffer */
+	/* Adds animation update to internal buffer
+	IMPORTANT: here we link roles with behaviour objects */
 	bool RegisterAnimationUpdate(PyObject *update_tuple);
 
 	/* Starts python only if not is_python_working */

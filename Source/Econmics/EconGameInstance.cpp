@@ -261,37 +261,15 @@ bool UEconGameInstance::GetAndScheduleSimulationEventsFromBackgroundThread() {
 		return false;
 	}
 
-	// After these two calls we release the simulation, so that it does not wait
-	// for hashmaps to route the data to actors.
-	TArray<FPySimGameEvent> recent_events = this->simulation_runnable->GetRecentEvents();
+	// After this call we release the simulation, so that it does not wait for actual animation
 	TArray<TSharedPtr<FPyBasicBehaviour, ESPMode::ThreadSafe>> data_updates = this->simulation_runnable->GetDataUpdates();
 	
-	// FIXME: we don't need two repeatative lookups of actors. But we can't fix it here.
-
-	for (auto ev_i : recent_events) {
-		/* These are FPySimGameEvent */
-		this->ScheduleBPAnimationOfSimulationEvent(ev_i);
-	}
-
 	for (auto data_i : data_updates) {
 		this->ScheduleBPAnimationDataUpdate(data_i);
 	}
 
 	return true;
 
-}
-
-// Animate an event - not very useful though
-bool UEconGameInstance::ScheduleBPAnimationOfSimulationEvent(FPySimGameEvent game_event) {
-	if (this->spawned_actors_map.Contains(game_event.parent_gid)) {
-		ABaseBlock *an_actor = this->spawned_actors_map[game_event.parent_gid];
-		an_actor->ApplyPySimGameEvent(game_event);
-		return true;
-	}
-	else {
-		UE_LOG(LogTemp, Warning, TEXT("Can't find an actor with gid=%d"), game_event.parent_gid);
-		return false;
-	}
 }
 
 

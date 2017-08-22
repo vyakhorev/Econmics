@@ -219,89 +219,13 @@ bool SimWorldInterface::RunSimulationInterval(float interval_tu) {
 
 	PyObject *pEventsList = PyObject_CallMethod(this->py_simulation_controller, "run_simulation_interval", "(f)", interval_tu);
 
-	if (!check_return_value(pEventsList, "pEventsList")) {
-		UE_LOG(LogTemp, Warning, TEXT("[%s] - can't get list of happened events"), *repr);
-		this->SafeStopPython();
-		return false;
-	}
-
-	/* Unpack list of events into internal variable */
-
-	PyObject *iterator_over_events = PyObject_GetIter(pEventsList);
-
-	if (check_for_python_error() || iterator_over_events == NULL) {
-		UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with iteration over events"), *repr);
-		this->SafeStopPython();
-		return false;
-	}
-
-	PyObject *ev_i = PyIter_Next(iterator_over_events);
-
 	if (check_for_python_error()) {
-		UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with iteration over events - before the loop"), *repr);
+		UE_LOG(LogTemp, Warning, TEXT("[%s] - error with simulation tick!"), *repr);
 		this->SafeStopPython();
 		return false;
 	}
 
-	this->recent_events.Empty();
-
-	while (ev_i) {
-
-		bool isok = this->RegisterRecentEvent(ev_i);
-
-		if (!isok) {
-			UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with event registration"), *repr);
-			this->SafeStopPython();
-			return false;
-		}
-
-		/* release reference when done */
-		Py_DECREF(ev_i);
-		ev_i = PyIter_Next(iterator_over_events);
-
-		if (check_for_python_error()) {
-			UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with iteration over events - inside the loop"), *repr);
-			this->SafeStopPython();
-			return false;
-		};
-
-	}
-
-	Py_DECREF(iterator_over_events);
-
-	return true;
-
-}
-
-
-bool SimWorldInterface::RegisterRecentEvent(PyObject *sim_event) {
-
-	static const FString repr("SimWorldInterface::registerRecentEvent");
-
-	PyObject *py_gid = PyObject_CallMethod(sim_event, "get_parent_gid", "()", NULL);
-	if (check_for_python_error()) {
-		UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with get_parent_gid of an event"), *repr);
-		this->SafeStopPython();
-		return false;
-	}
-
-	PyObject *py_role = PyObject_CallMethod(sim_event, "get_behaviour_role", "()", NULL);
-	if (check_for_python_error()) {
-		UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with get_behaviour_role of an event"), *repr);
-		this->SafeStopPython();
-		return false;
-	}
-
-	// Register which block 'received' an event
-	int32 gid = PyLong_AsLong(py_gid);
-	// Register which component (=behaviour) should be updated
-	int32 role = PyLong_AsLong(py_role);
-
-	FPySimGameEvent new_event = FPySimGameEvent();
-	new_event.parent_gid = gid;
-	new_event.behaviour_role = role;
-
-	this->recent_events.Add(new_event);
+	// In current implementation we read data updates, not the events themselves.
 
 	return true;
 
@@ -377,6 +301,7 @@ bool SimWorldInterface::GatherAnimationUpdates() {
 
 }
 
+// update here when new data / behaviour implemented
 bool SimWorldInterface::RegisterAnimationUpdate(PyObject *update_tuple) {
 
 	static const FString repr("SimWorldInterface::RegisterAnimationUpdate");
@@ -395,31 +320,161 @@ bool SimWorldInterface::RegisterAnimationUpdate(PyObject *update_tuple) {
 		return false;
 	};
 
-	if (role == 100) {
-		// Construct object. This will let this pointer to own the object.
-		// The structure shall be deleted when the pointer is out of scope
-		// (it's passed all the way to the actor, deleted when new update
-		// arrives, so it's important to have it thread safe since the
-		// buffer array will be emptied on every tick).
+	 /* Construct object. This will let this pointer to own the object.
+	 The structure shall be deleted when the pointer is out of scope
+	 (it's passed all the way to the actor, deleted when new update
+	 arrives, so it's important to have it thread safe since the
+	 buffer array will be emptied on every tick). */
+
+	if (role == 1) {
+
+		TSharedPtr<FPyBehTemperature, ESPMode::ThreadSafe> new_update(new FPyBehTemperature);
+		new_update->parent_gid = gid;
+		new_update->behaviour_role = role;
+
+		new_update->current_temperature = PyFloat_AsDouble(PyTuple_GetItem(update_tuple, 2));
+
+		if (check_for_python_error()) {
+			UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with reading role %d"), *repr, role);
+			this->SafeStopPython();
+			return false;
+		};
+
+		this->behaviour_updates.Add(new_update);
+
+		return true;
+
+	}
+	else if (role == 2) {
+
+		// vapors not implemented yet
+		TSharedPtr<FPyBehVapors, ESPMode::ThreadSafe> new_update(new FPyBehVapors);
+		new_update->parent_gid = gid;
+		new_update->behaviour_role = role;
+
+		this->behaviour_updates.Add(new_update);
+
+		return true;
+
+	}
+	else if (role == 3) {
+
+		TSharedPtr<FPyBehChemistry, ESPMode::ThreadSafe> new_update(new FPyBehChemistry);
+		new_update->parent_gid = gid;
+		new_update->behaviour_role = role;
+
+		PyObject *data_tuple = PyTuple_GetItem(update_tuple, 2);
+
+		new_update->perc_C = PyFloat_AsDouble(PyTuple_GetItem(data_tuple, 0));
+		if (check_for_python_error()) {
+			UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with reading role %d"), *repr, role);
+			this->SafeStopPython();
+			return false;
+		};
+		new_update->perc_Fe = PyFloat_AsDouble(PyTuple_GetItem(data_tuple, 1));
+		if (check_for_python_error()) {
+			UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with reading role %d"), *repr, role);
+			this->SafeStopPython();
+			return false;
+		};
+		new_update->perc_K = PyFloat_AsDouble(PyTuple_GetItem(data_tuple, 2));
+		if (check_for_python_error()) {
+			UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with reading role %d"), *repr, role);
+			this->SafeStopPython();
+			return false;
+		};
+		new_update->perc_O = PyFloat_AsDouble(PyTuple_GetItem(data_tuple, 3));
+		if (check_for_python_error()) {
+			UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with reading role %d"), *repr, role);
+			this->SafeStopPython();
+			return false;
+		};
+		new_update->perc_H = PyFloat_AsDouble(PyTuple_GetItem(data_tuple, 4));
+		if (check_for_python_error()) {
+			UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with reading role %d"), *repr, role);
+			this->SafeStopPython();
+			return false;
+		};
+		new_update->perc_N = PyFloat_AsDouble(PyTuple_GetItem(data_tuple, 5));
+		if (check_for_python_error()) {
+			UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with reading role %d"), *repr, role);
+			this->SafeStopPython();
+			return false;
+		};
+
+		this->behaviour_updates.Add(new_update);
+
+		return true;
+
+	}
+	else if (role == 4) {
+
+		TSharedPtr<FPyBehBiomass, ESPMode::ThreadSafe> new_update(new FPyBehBiomass);
+		new_update->parent_gid = gid;
+		new_update->behaviour_role = role;
+
+		PyObject *data_tuple = PyTuple_GetItem(update_tuple, 2);
+
+		new_update->bushes = PyFloat_AsDouble(PyTuple_GetItem(data_tuple, 0));
+		if (check_for_python_error()) {
+			UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with reading role %d"), *repr, role);
+			this->SafeStopPython();
+			return false;
+		};
+		new_update->grass = PyFloat_AsDouble(PyTuple_GetItem(data_tuple, 1));
+		if (check_for_python_error()) {
+			UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with reading role %d"), *repr, role);
+			this->SafeStopPython();
+			return false;
+		};
+		new_update->trees = PyFloat_AsDouble(PyTuple_GetItem(data_tuple, 2));
+		if (check_for_python_error()) {
+			UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with reading role %d"), *repr, role);
+			this->SafeStopPython();
+			return false;
+		};
+		new_update->predators = PyFloat_AsDouble(PyTuple_GetItem(data_tuple, 3));
+		if (check_for_python_error()) {
+			UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with reading role %d"), *repr, role);
+			this->SafeStopPython();
+			return false;
+		};
+		new_update->preys = PyFloat_AsDouble(PyTuple_GetItem(data_tuple, 4));
+		if (check_for_python_error()) {
+			UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with reading role %d"), *repr, role);
+			this->SafeStopPython();
+			return false;
+		};
+
+		this->behaviour_updates.Add(new_update);
+
+		return true;
+
+	}
+	else if (role == 100) {
+		
 		TSharedPtr<FPyBehBlooming, ESPMode::ThreadSafe> new_update(new FPyBehBlooming);
 		new_update->parent_gid = gid;
 		new_update->behaviour_role = role;
 
-		new_update->is_blooming = true;  // TODO: read from python
+		new_update->is_blooming = (PyLong_AsLong(PyTuple_GetItem(update_tuple, 2)) == 1);
+
+		if (check_for_python_error()) {
+			UE_LOG(LogTemp, Warning, TEXT("[%s] - failed with reading role %d"), *repr, role);
+			this->SafeStopPython();
+			return false;
+		};
 
 		this->behaviour_updates.Add(new_update);
+
+		return true;
+
 	}
 	else {
-		UE_LOG(LogTemp, Warning, TEXT("[%s] - failed to find role %d"), *repr, role);
-		TSharedPtr<FPyBasicBehaviour, ESPMode::ThreadSafe> new_update(new FPyBasicBehaviour);
-		new_update->parent_gid = gid;
-		new_update->behaviour_role = role;
-
-		this->behaviour_updates.Add(new_update);
+		UE_LOG(LogTemp, Warning, TEXT("[%s] - failed to find role %d, skipping the update"), *repr, role);
+		return false;
 	};
 	
-	return true;
-
 }
 
 

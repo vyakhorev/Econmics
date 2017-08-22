@@ -1,7 +1,7 @@
 #pragma once
 
+
 #include "CoreMinimal.h"
-#include "EvStruct.h"  // this is how game thread animates events
 #include "SimWorldInterface.h"  // Python calls interface
 
 class FPyThreadWorker : public FRunnable {
@@ -26,14 +26,7 @@ public:
 
 	/* ~~~~~~~~~~ Command interface ~~~~~~~~~~ */
 
-	/* A method to get recent simulation events, called from the game thread,
-	the events are copied from test_events (and simulation halts while they're
-	transfered). Run() cycle halts after a simulation tick, this call transfers
-	the data and releases the Run() cycle. So The game can just call this mthod
-	periodically (not too often).*/
-	TArray<FPySimGameEvent> GetRecentEvents();
-
-	/* Returns data updates. Not sure if we need raw events. */
+	/* Returns data updates. Releses simulation. */
 	TArray<TSharedPtr<FPyBasicBehaviour, ESPMode::ThreadSafe>> GetDataUpdates();
 
 	/* A command to change the active chunk (would load / generate it
@@ -58,7 +51,7 @@ private:
 	/* A link to SimWorldInterface instance that communicates with python code */
 	SimWorldInterface sim_world;
 
-	/* ~~~~~~~~~~ PySimGameEvents handling  ~~~~~~~~~~  */
+	/* ~~~~~~~~~~ Simulation handling  ~~~~~~~~~~  */
 
 	/* Each time the game thread calls for GetRecentEvents(), we silently
 	generate new ones with python. */
@@ -74,19 +67,12 @@ private:
 	/* Defines how x1, x2 ... transforms into actual simulation time */
 	float sim_time_timescale;
 
-	/* Simulation call, populates recent_events. This is repeatedly called
-	within Run() cycle. Uses recent_events_mutex and  */
+	/* Simulation call. Does python calculations without communicating.
+	In order to get animation updates use ThreadSafeGatherAnimationData*/
 	bool ThreadSafeRunSimEventsTick(float dt);
 
-	/* The actual thread unsafe population of recent_events array (I don't
-	check for mutex availability here */
+	/* The actual call to simulation. */
 	void CalculateRecentEvents(float dt);
-
-	/* Mutex over recent_events array */
-	FCriticalSection recent_events_mutex;
-
-	/* Hold simulated events here */
-	TArray<FPySimGameEvent> recent_events;
 
 	/* This FEvent helps to snooze and wake up simulation thread.
 	Wait() is called in Run(), Trigger() is called in GetRecentEvents(). */
@@ -97,8 +83,6 @@ private:
 	how it works though. */
 	FThreadSafeBool flag_is_simulation_stopped;
 
-	/* ~~~~~~~~~~ Animation (data) updates ~~~~~~~~~~  */
-
 	/* Mutex over data_updates array */
 	FCriticalSection data_updates_mutex;
 
@@ -108,8 +92,6 @@ private:
 	That's why I added additional buffer. We can get rid of it. */
 	TArray<TSharedPtr<FPyBasicBehaviour, ESPMode::ThreadSafe>> data_updates;
 
-	/* Main cycle wait for this semaphore as well. */
-	FEvent *data_cycle_semaphore;
 
 	/* Data collection threadsafe wrapper */
 	bool ThreadSafeGatherAnimationData();

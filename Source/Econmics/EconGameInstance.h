@@ -96,9 +96,6 @@ private:
 	(this makes the background thread simulate more events). */
 	bool GetAndScheduleSimulationEventsFromBackgroundThread();
 
-	/* Schedule animation event from simulation (more like 'trigger' at the moment) */
-	bool ScheduleBPAnimationOfSimulationEvent(FPySimGameEvent game_event);
-
 	/* Schedule data update from simulation. */
 	bool ScheduleBPAnimationDataUpdate(TSharedPtr<FPyBasicBehaviour, ESPMode::ThreadSafe> behaviour_data_update);
 

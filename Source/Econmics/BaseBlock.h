@@ -4,7 +4,10 @@
 // I have to include behaviours directly, otherwise UBT fails
 #include "BasicBehaviour.h"
 #include "BehBlooming.h"
-#include "EvStruct.h"
+#include "BehTemperature.h"
+#include "BehVapors.h"
+#include "BehChemistry.h"
+#include "BehBiomass.h"
 
 #include "Engine/StaticMeshActor.h"
 #include "BaseBlock.generated.h"
@@ -23,6 +26,20 @@ public:
 
 	/* Block's state is defined with numeric values of different simulation
 	aspects called behaviours. So these slots replicate python data. */
+
+	/* Temperature of a block in F */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Simulation glue")
+	FPyBehTemperature beh_temperature;
+	/* Not implemented yet */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Simulation glue")
+	FPyBehVapors beh_vapors;
+	/* Radicals in block, this is soil fertility model */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Simulation glue")
+	FPyBehChemistry beh_chemistry;
+	/* Everything that lives */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Simulation glue")
+	FPyBehBiomass beh_biomass;
+	/* Testing swithing state from blooming into non-blooming */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Simulation glue")
 	FPyBehBlooming beh_blooming;
 
@@ -34,17 +51,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Simulation glue")
 	int32 cube_type;
 
-	/* This call applies an event to internal values and then triggers BP event */
-	void ApplyPySimGameEvent(FPySimGameEvent game_event);
-
 	/* This call updates simulation data inside this actor. The updates come from 
 	another thread, that's why the declaration is so long. */
 	void ApplyPyDataUpdate(TSharedPtr<FPyBasicBehaviour, ESPMode::ThreadSafe> behaviour_data_update);
-
-	/* Blueprint event. Process animation of a simulated event here.
-	Not sure whether we need raw events here. */
-	UFUNCTION(BlueprintImplementableEvent, meta = (DisplayName = "Python simulation event"), Category = "Simulation glue")
-	void python_simulation_new_event(FPySimGameEvent game_event);
 
 	/* Blueprint event. Data update notification */
 	UFUNCTION(BlueprintImplementableEvent, meta = (DisplayName = "Python data update"), Category = "Simulation glue")
