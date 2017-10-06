@@ -42,3 +42,33 @@ void ABaseBlock::ApplyPyDataUpdate(TSharedPtr<FPyBasicBehaviour, ESPMode::Thread
 
 }
 
+FString ABaseBlock::GetSimulationDataDescription() {
+	// Returns a string with all simulation data. Helpful and simple.
+	
+	auto repr_gid = FString::Printf(TEXT("Block %d\n"), this->gid);
+
+	auto repr_temp = FString::Printf(TEXT("Temperature = %.2f \n"), this->beh_temperature.current_temperature);
+
+	auto repr_boom = FString::Printf(TEXT("Blooming = %d \n"), this->beh_blooming.is_blooming);
+
+	auto repr_chem = FString::Printf(TEXT("Chemicals: C %.2f, Fe %.2f, K %.2f, O %.2f, H %.2f, N %.2f \n"),
+									 this->beh_chemistry.perc_C,
+								     this->beh_chemistry.perc_Fe,
+									 this->beh_chemistry.perc_K,
+									 this->beh_chemistry.perc_O,
+								     this->beh_chemistry.perc_H,
+								     this->beh_chemistry.perc_N);
+
+	auto repr_biomass = FString::Printf(TEXT("Bio: bushes %.2f, grass %.2f, trees %.2f, predators %.2f, preys %.2f \n"),
+										this->beh_biomass.bushes,
+										this->beh_biomass.grass,
+										this->beh_biomass.trees,
+										this->beh_biomass.predators,
+										this->beh_biomass.preys);
+
+	auto ans = repr_gid + repr_temp + repr_chem + repr_biomass + repr_boom;
+	
+	return ans;
+
+}
+

@@ -59,5 +59,8 @@ public:
 	UFUNCTION(BlueprintImplementableEvent, meta = (DisplayName = "Python data update"), Category = "Simulation glue")
 	void python_simulation_data_update(int32 behaviour_role);
 
+	UFUNCTION(BlueprintCallable, Category = "Simulation glue")
+	FString GetSimulationDataDescription();
+
 };
 
